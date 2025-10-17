@@ -19,7 +19,11 @@ interface ToolMessage extends BaseMessage {
   name: string;
 }
 
-type Message = UserMessage | AssistantMessage | ToolMessage;
+interface SystemMessage extends BaseMessage {
+  role: "system";
+}
+
+type Message = UserMessage | AssistantMessage | ToolMessage | SystemMessage;
 
 // Tools
 interface ToolCall {
