@@ -1,6 +1,7 @@
 import axios from "axios";
 import { LLMProvider } from "./base";
 import { ChatRequest, ChatResponse, Message, ToolDefinition } from "../types";
+import { v4 as uuid } from "uuid";
 
 export class OllamaProvider implements LLMProvider {
   private baseURL: string;
@@ -20,7 +21,7 @@ export class OllamaProvider implements LLMProvider {
     const body = {
       model: request.model || this.defaultModel,
       messages: this.convertToOllamaMessages(request.messages),
-      tools: request.tools || undefined,
+      tools: request.tools,
       stream: false,
     };
     try {
@@ -69,7 +70,7 @@ export class OllamaProvider implements LLMProvider {
         // This is a tool call
         toolCalls = [
           {
-            id: `call_${Date.now()}`, // Generate an ID
+            id: `call_${uuid()}`, // Generate an ID
             type: "function" as const,
             function: {
               name: parsed.name,
