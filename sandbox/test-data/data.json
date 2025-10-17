@@ -1,0 +1,14 @@
+{
+  "project": "buildabot",
+  "purpose": "learning",
+  "features": [
+    "LLM provider abstraction",
+    "Tool system",
+    "Agent loop",
+    "Safe command execution"
+  ],
+  "models": {
+    "local": "qwen2.5-coder:7b",
+    "alternatives": ["llama3.2:3b", "gpt-oss:20b"]
+  }
+}
