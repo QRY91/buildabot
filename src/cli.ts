@@ -10,6 +10,8 @@ import {
   readFileTool,
   writeFileTool,
 } from "./tools/filesystem";
+import { DatabaseManager } from "./db/manager";
+import { AgentServer } from "./server/index";
 
 dotenv.config();
 
@@ -28,6 +30,9 @@ program
     process.env.OLLAMA_HOST || "http://localhost:11434"
   )
   .option("-k, --api-key <key>", "API key for OpenAI or Anthropic")
+  .option("-s, --server", "Start web server mode")
+  .option("--port <number>", "Server port", "3000")
+  .option("--no-db", "Disable database logging")
   .parse();
 
 const options = program.opts();
@@ -57,8 +62,48 @@ async function main() {
   toolRegistry.register(listDirectoryTool);
   // toolRegistry.register(executeCommandTool); // Enable if you want shell access
 
+  // Check if server mode
+  if (options.server) {
+    console.log("\nStarting server mode...\n");
+
+    // Initialize database
+    const db = new DatabaseManager("./conversations.db");
+    await db.initialize();
+
+    // Create and start server
+    const server = new AgentServer({
+      port: parseInt(options.port, 10),
+      db,
+      provider,
+      toolRegistry,
+      // staticPath: "./web/dist", // Uncomment when frontend is built
+    });
+
+    await server.start();
+
+    console.log(`\nServer started successfully!`);
+    console.log(`- Web UI: http://localhost:${options.port}`);
+    console.log(`- API: http://localhost:${options.port}/api`);
+    console.log(`- WebSocket: ws://localhost:${options.port}\n`);
+
+    // Keep process alive
+    process.on("SIGINT", async () => {
+      console.log("\nShutting down server...");
+      await server.stop();
+      process.exit(0);
+    });
+
+    return;
+  }
+
+  // Regular CLI mode
+  const db = options.db ? new DatabaseManager("./conversations.db") : undefined;
+  if (db) {
+    await db.initialize();
+  }
+
   // Create agent
-  const agent = new Agent(provider, toolRegistry);
+  const agent = new Agent(provider, toolRegistry, db ? { db } : undefined);
 
   // Optional: Set a system prompt
   agent.setSystemPrompt(

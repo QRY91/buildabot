@@ -1,5 +1,5 @@
 import axios from "axios";
-import { LLMProvider } from "./base";
+import { LLMProvider, StreamChunk } from "./base";
 import { ChatRequest, ChatResponse, Message, ToolDefinition } from "../types";
 import { v4 as uuid } from "uuid";
 
@@ -32,6 +32,103 @@ export class OllamaProvider implements LLMProvider {
       return this.parseOllamaResponse(response.data);
     } catch (error) {
       // 5. Handle errors appropriately
+      if (axios.isAxiosError(error)) {
+        throw new Error(
+          `Ollama API error: ${error.response?.data?.error || error.message}`
+        );
+      }
+      throw error;
+    }
+  }
+
+  async *chatStream(request: ChatRequest): AsyncGenerator<StreamChunk, ChatResponse, unknown> {
+    const body = {
+      model: request.model || this.defaultModel,
+      messages: this.convertToOllamaMessages(request.messages),
+      tools: request.tools,
+      stream: true,
+    };
+
+    try {
+      const response = await axios.post(`${this.baseURL}/api/chat`, body, {
+        responseType: 'stream',
+      });
+
+      let fullContent = '';
+      let toolCalls: any[] = [];
+      let finishReason = 'stop';
+
+      // Parse streaming response (newline-delimited JSON)
+      for await (const chunk of response.data) {
+        const lines = chunk.toString().split('\n').filter((line: string) => line.trim());
+
+        for (const line of lines) {
+          try {
+            const data = JSON.parse(line);
+
+            // Handle content streaming
+            if (data.message?.content) {
+              fullContent += data.message.content;
+              yield {
+                type: 'content',
+                content: data.message.content,
+              };
+            }
+
+            // Handle tool calls
+            if (data.message?.tool_calls && Array.isArray(data.message.tool_calls)) {
+              toolCalls = data.message.tool_calls;
+              for (const tc of toolCalls) {
+                yield {
+                  type: 'tool_call',
+                  toolCall: {
+                    id: `call_${uuid()}`,
+                    type: 'function' as const,
+                    function: {
+                      name: tc.function.name,
+                      arguments: typeof tc.function.arguments === 'string'
+                        ? tc.function.arguments
+                        : JSON.stringify(tc.function.arguments),
+                    },
+                  },
+                };
+              }
+            }
+
+            // Final chunk
+            if (data.done) {
+              finishReason = data.done_reason || 'stop';
+
+              // Try to extract tool call from content if not in tool_calls field
+              if (toolCalls.length === 0 && fullContent.includes('{')) {
+                const extracted = this.extractToolCallFromContent(fullContent);
+                if (extracted) {
+                  toolCalls = [extracted];
+                  yield {
+                    type: 'tool_call',
+                    toolCall: extracted,
+                  };
+                }
+              }
+            }
+          } catch (e) {
+            // Skip invalid JSON lines
+            continue;
+          }
+        }
+      }
+
+      // Return final response
+      const finalToolCalls = toolCalls.length > 0 ? toolCalls : undefined;
+      return {
+        message: {
+          role: 'assistant',
+          content: finalToolCalls ? '' : fullContent,
+          ...(finalToolCalls && { tool_calls: finalToolCalls }),
+        },
+        finish_reason: finishReason,
+      };
+    } catch (error) {
       if (axios.isAxiosError(error)) {
         throw new Error(
           `Ollama API error: ${error.response?.data?.error || error.message}`
@@ -76,6 +173,51 @@ export class OllamaProvider implements LLMProvider {
     });
   }
 
+  private extractToolCallFromContent(content: string): any | null {
+    // Try to extract tool call JSON from content
+    if (!content.includes('{')) return null;
+
+    try {
+      const startIdx = content.indexOf('{');
+      if (startIdx === -1) return null;
+
+      let parsed = null;
+      let endIdx = startIdx + 1;
+
+      // Incrementally try to parse until we get valid JSON
+      while (endIdx <= content.length && !parsed) {
+        try {
+          const jsonStr = content.substring(startIdx, endIdx);
+          const candidate = JSON.parse(jsonStr);
+          if (candidate.name && candidate.arguments) {
+            parsed = candidate;
+            break;
+          }
+        } catch {
+          // Not valid yet, keep going
+        }
+        endIdx++;
+      }
+
+      if (parsed) {
+        return {
+          id: `call_${uuid()}`,
+          type: "function" as const,
+          function: {
+            name: parsed.name,
+            arguments: typeof parsed.arguments === 'string'
+              ? parsed.arguments
+              : JSON.stringify(parsed.arguments),
+          },
+        };
+      }
+    } catch (e) {
+      // Failed to extract
+    }
+
+    return null;
+  }
+
   private parseOllamaResponse(response: any): ChatResponse {
     const message = response.message;
 
@@ -96,48 +238,9 @@ export class OllamaProvider implements LLMProvider {
       }));
     } else if (message.content && message.content.includes('{')) {
       // Fallback: Some models (like qwen2.5-coder) return JSON in content
-      // instead of using the tool_calls array. Try to extract it.
-      try {
-        // Find the start of the JSON object
-        const startIdx = message.content.indexOf('{');
-        if (startIdx !== -1) {
-          // Try to find the matching closing brace by parsing
-          let parsed = null;
-          let endIdx = startIdx + 1;
-
-          // Incrementally try to parse until we get valid JSON
-          while (endIdx <= message.content.length && !parsed) {
-            try {
-              const jsonStr = message.content.substring(startIdx, endIdx);
-              const candidate = JSON.parse(jsonStr);
-              if (candidate.name && candidate.arguments) {
-                parsed = candidate;
-                break;
-              }
-            } catch {
-              // Not valid yet, keep going
-            }
-            endIdx++;
-          }
-
-          if (parsed) {
-            // This looks like a tool call
-            toolCalls = [
-              {
-                id: `call_${uuid()}`,
-                type: "function" as const,
-                function: {
-                  name: parsed.name,
-                  arguments: typeof parsed.arguments === 'string'
-                    ? parsed.arguments
-                    : JSON.stringify(parsed.arguments),
-                },
-              },
-            ];
-          }
-        }
-      } catch (e) {
-        // Not valid JSON or not a tool call, treat as normal content
+      const extracted = this.extractToolCallFromContent(message.content);
+      if (extracted) {
+        toolCalls = [extracted];
       }
     }
 
