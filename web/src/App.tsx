@@ -3,7 +3,7 @@ import { Header } from './components/Header';
 import { Sidebar } from './components/Sidebar';
 import { ChatView } from './components/ChatView';
 import { GraphView } from './components/GraphView';
-import { Conversation } from './types';
+import type { Conversation } from './types';
 import {
   fetchConversations,
   createConversation,
@@ -18,10 +18,13 @@ function App() {
   const [conversations, setConversations] = useState<Conversation[]>([]);
   const [currentConversation, setCurrentConversation] = useState<Conversation | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [isDraft, setIsDraft] = useState(false); // Track if current conversation is a draft
 
-  // Load conversations on mount
+  // Load conversations on mount and start in draft mode
   useEffect(() => {
     loadConversations();
+    // Start with a draft conversation
+    setIsDraft(true);
   }, []);
 
   // Save view mode preference
@@ -40,24 +43,17 @@ function App() {
     }
   };
 
-  const handleNewConversation = async () => {
-    const title = prompt('Enter conversation title:');
-    if (!title) return;
-
-    try {
-      const newConv = await createConversation(title);
-      setConversations((prev) => [newConv, ...prev]);
-      handleSelectConversation(newConv.id);
-    } catch (error) {
-      console.error('Failed to create conversation:', error);
-      alert('Failed to create conversation');
-    }
+  const handleNewConversation = () => {
+    // Don't create in DB, just switch to draft mode
+    setCurrentConversation(null);
+    setIsDraft(true);
   };
 
   const handleSelectConversation = async (id: string) => {
     try {
       const conv = await fetchConversation(id);
       setCurrentConversation(conv);
+      setIsDraft(false);
     } catch (error) {
       console.error('Failed to load conversation:', error);
       alert('Failed to load conversation');
@@ -79,11 +75,16 @@ function App() {
     }
   };
 
-  const handleMessageSent = () => {
-    // Reload the current conversation to get the new messages
-    if (currentConversation) {
-      handleSelectConversation(currentConversation.id);
-      loadConversations(); // Update the sidebar timestamps
+  const handleMessageSent = async (conversationId?: string) => {
+    // If a conversation ID was returned (draft was created), update state
+    if (conversationId && isDraft) {
+      setIsDraft(false);
+      await handleSelectConversation(conversationId);
+      await loadConversations();
+    } else if (currentConversation) {
+      // Reload the current conversation to get the new messages
+      await handleSelectConversation(currentConversation.id);
+      await loadConversations(); // Update the sidebar timestamps
     }
   };
 
@@ -127,6 +128,7 @@ function App() {
         {viewMode === 'chat' ? (
           <ChatView
             conversation={currentConversation}
+            isDraft={isDraft}
             onMessageSent={handleMessageSent}
           />
         ) : (

@@ -1,14 +1,15 @@
 import { useState, useEffect, useRef } from 'react';
-import { Conversation } from '../types';
+import type { Conversation } from '../types';
 import { MessageBubble } from './MessageBubble';
-import { sendMessage } from '../api';
+import { sendMessage, createConversation } from '../api';
 
 interface ChatViewProps {
   conversation: Conversation | null;
-  onMessageSent: () => void;
+  isDraft: boolean;
+  onMessageSent: (conversationId?: string) => void;
 }
 
-export function ChatView({ conversation, onMessageSent }: ChatViewProps) {
+export function ChatView({ conversation, isDraft, onMessageSent }: ChatViewProps) {
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -20,15 +21,28 @@ export function ChatView({ conversation, onMessageSent }: ChatViewProps) {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!input.trim() || !conversation || isLoading) return;
+    if (!input.trim() || isLoading) return;
 
     const userInput = input;
     setInput('');
     setIsLoading(true);
 
     try {
-      await sendMessage(conversation.id, userInput);
-      onMessageSent();
+      let conversationId: string;
+
+      // If this is a draft, create the conversation first
+      if (isDraft) {
+        const title = userInput.length > 50 ? userInput.substring(0, 50) + '...' : userInput;
+        const newConv = await createConversation(title);
+        conversationId = newConv.id;
+      } else if (conversation) {
+        conversationId = conversation.id;
+      } else {
+        throw new Error('No conversation selected');
+      }
+
+      await sendMessage(conversationId, userInput);
+      onMessageSent(isDraft ? conversationId : undefined);
     } catch (error) {
       console.error('Failed to send message:', error);
       alert('Failed to send message');
@@ -37,27 +51,14 @@ export function ChatView({ conversation, onMessageSent }: ChatViewProps) {
     }
   };
 
-  if (!conversation) {
-    return (
-      <div style={{
-        flex: 1,
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        color: '#888',
-        fontSize: '18px',
-      }}>
-        Select a conversation or create a new one
-      </div>
-    );
-  }
+  // Show draft mode UI when no conversation is loaded
+  const showDraftUI = !conversation || isDraft;
 
   return (
     <div style={{
       flex: 1,
       display: 'flex',
       flexDirection: 'column',
-      height: '100vh',
       backgroundColor: '#0f0f0f',
     }}>
       {/* Header */}
@@ -68,7 +69,7 @@ export function ChatView({ conversation, onMessageSent }: ChatViewProps) {
         color: '#fff',
       }}>
         <h2 style={{ margin: 0, fontSize: '18px', fontWeight: '600' }}>
-          {conversation.title}
+          {showDraftUI ? 'New Chat' : conversation?.title}
         </h2>
       </div>
 
@@ -78,9 +79,21 @@ export function ChatView({ conversation, onMessageSent }: ChatViewProps) {
         overflowY: 'auto',
         padding: '24px',
       }}>
-        {conversation.messages?.map((message) => (
+        {!showDraftUI && conversation?.messages?.map((message) => (
           <MessageBubble key={message.id} message={message} />
         ))}
+        {showDraftUI && (
+          <div style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            height: '100%',
+            color: '#666',
+            fontSize: '16px',
+          }}>
+            Start a new conversation...
+          </div>
+        )}
         {isLoading && (
           <div style={{
             padding: '12px',

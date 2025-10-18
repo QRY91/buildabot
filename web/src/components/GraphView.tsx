@@ -1,7 +1,8 @@
 import { useMemo } from 'react';
-import ReactFlow, { Node, Edge, Background, Controls } from 'reactflow';
+import ReactFlow, { Background, Controls } from 'reactflow';
+import type { Node, Edge } from 'reactflow';
 import 'reactflow/dist/style.css';
-import { Conversation, Message, ToolCall } from '../types';
+import type { Conversation, Message, ToolCall } from '../types';
 
 interface GraphViewProps {
   conversation: Conversation | null;
@@ -115,7 +116,7 @@ export function GraphView({ conversation }: GraphViewProps) {
   }
 
   return (
-    <div style={{ flex: 1, height: '100vh', backgroundColor: '#0f0f0f' }}>
+    <div style={{ flex: 1, backgroundColor: '#0f0f0f' }}>
       <ReactFlow
         nodes={nodes}
         edges={edges}

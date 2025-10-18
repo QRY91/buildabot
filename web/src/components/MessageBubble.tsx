@@ -1,4 +1,4 @@
-import { Message, ToolCall } from '../types';
+import type { Message, ToolCall } from '../types';
 
 interface MessageBubbleProps {
   message: Message;

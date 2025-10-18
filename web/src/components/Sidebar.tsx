@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Conversation } from '../types';
+import type { Conversation } from '../types';
 import { formatDistance } from 'date-fns';
 
 interface SidebarProps {
@@ -22,17 +22,18 @@ export function Sidebar({
   return (
     <div style={{
       width: '280px',
-      height: '100vh',
       backgroundColor: '#1e1e1e',
       color: '#fff',
       display: 'flex',
       flexDirection: 'column',
       borderRight: '1px solid #333',
+      overflow: 'hidden',
     }}>
       {/* Header */}
       <div style={{
         padding: '16px',
         borderBottom: '1px solid #333',
+        flexShrink: 0,
       }}>
         <button
           onClick={onNewConversation}
@@ -48,7 +49,7 @@ export function Sidebar({
             fontWeight: '500',
           }}
         >
-          + New Conversation
+          + New Chat
         </button>
       </div>
 
