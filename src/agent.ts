@@ -1,6 +1,6 @@
-import { LLMProvider } from './providers/base';
-import { ToolRegistry } from './tools/base';
-import { Message, UserMessage, AssistantMessage, ToolMessage, ToolCall } from './types';
+import { LLMProvider } from "./providers/base";
+import { ToolRegistry } from "./tools/base";
+import { Message, ToolMessage, UserMessage } from "./types";
 
 export class Agent {
   private provider: LLMProvider;
@@ -16,8 +16,8 @@ export class Agent {
   async run(userInput: string): Promise<string> {
     // Add user message to history
     const userMessage: UserMessage = {
-      role: 'user',
-      content: userInput
+      role: "user",
+      content: userInput,
     };
     this.messages.push(userMessage);
 
@@ -26,14 +26,17 @@ export class Agent {
       // Call LLM with current conversation and available tools
       const response = await this.provider.chat({
         messages: this.messages,
-        tools: this.toolRegistry.getDefinitions()
+        tools: this.toolRegistry.getDefinitions(),
       });
 
       // Add assistant's response to history
       this.messages.push(response.message);
 
       // Check if there are tool calls to execute
-      if (!response.message.tool_calls || response.message.tool_calls.length === 0) {
+      if (
+        !response.message.tool_calls ||
+        response.message.tool_calls.length === 0
+      ) {
         // No tool calls, return the final response
         return response.message.content;
       }
@@ -44,10 +47,10 @@ export class Agent {
 
         // Add tool result to conversation
         const toolMessage: ToolMessage = {
-          role: 'tool',
+          role: "tool",
           tool_call_id: toolCall.id,
           name: toolCall.function.name,
-          content: result
+          content: result,
         };
         this.messages.push(toolMessage);
       }
@@ -56,7 +59,9 @@ export class Agent {
     }
 
     // Max iterations reached
-    throw new Error(`Max iterations (${this.maxIterations}) reached without final response`);
+    throw new Error(
+      `Max iterations (${this.maxIterations}) reached without final response`
+    );
   }
 
   clearHistory(): void {
@@ -71,11 +76,11 @@ export class Agent {
     // Add or update system message at the beginning
     // Note: Some providers handle this differently (e.g., Anthropic)
     const systemMessage = {
-      role: 'system' as const,
-      content: prompt
+      role: "system" as const,
+      content: prompt,
     };
 
-    if (this.messages.length > 0 && this.messages[0].role === 'system') {
+    if (this.messages.length > 0 && this.messages[0]?.role === "system") {
       this.messages[0] = systemMessage;
     } else {
       this.messages.unshift(systemMessage);
