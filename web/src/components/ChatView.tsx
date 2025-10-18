@@ -12,12 +12,13 @@ interface ChatViewProps {
 export function ChatView({ conversation, isDraft, onMessageSent }: ChatViewProps) {
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [pendingMessage, setPendingMessage] = useState<string | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    // Scroll to bottom when messages change
+    // Scroll to bottom when messages change or pending message is set
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [conversation?.messages]);
+  }, [conversation?.messages, pendingMessage]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -25,6 +26,7 @@ export function ChatView({ conversation, isDraft, onMessageSent }: ChatViewProps
 
     const userInput = input;
     setInput('');
+    setPendingMessage(userInput); // Show message immediately
     setIsLoading(true);
 
     try {
@@ -42,10 +44,12 @@ export function ChatView({ conversation, isDraft, onMessageSent }: ChatViewProps
       }
 
       await sendMessage(conversationId, userInput);
+      setPendingMessage(null); // Clear pending message once sent
       onMessageSent(isDraft ? conversationId : undefined);
     } catch (error) {
       console.error('Failed to send message:', error);
       alert('Failed to send message');
+      setPendingMessage(null);
     } finally {
       setIsLoading(false);
     }
@@ -82,7 +86,7 @@ export function ChatView({ conversation, isDraft, onMessageSent }: ChatViewProps
         {!showDraftUI && conversation?.messages?.map((message) => (
           <MessageBubble key={message.id} message={message} />
         ))}
-        {showDraftUI && (
+        {showDraftUI && !pendingMessage && (
           <div style={{
             display: 'flex',
             alignItems: 'center',
@@ -92,6 +96,27 @@ export function ChatView({ conversation, isDraft, onMessageSent }: ChatViewProps
             fontSize: '16px',
           }}>
             Start a new conversation...
+          </div>
+        )}
+        {pendingMessage && (
+          <div style={{
+            display: 'flex',
+            justifyContent: 'flex-end',
+            margin: '16px 0',
+          }}>
+            <div style={{
+              maxWidth: '70%',
+              padding: '12px 16px',
+              borderRadius: '12px',
+              backgroundColor: '#2563eb',
+              color: '#fff',
+              fontSize: '15px',
+              lineHeight: '1.5',
+              whiteSpace: 'pre-wrap',
+              wordBreak: 'break-word',
+            }}>
+              {pendingMessage}
+            </div>
           </div>
         )}
         {isLoading && (
