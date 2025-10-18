@@ -104,6 +104,15 @@ export class DatabaseManager {
     );
   }
 
+  async updateConversationTitle(id: string, title: string): Promise<void> {
+    if (!this.db) throw new Error("Database not initialized");
+
+    await this.db.run(
+      "UPDATE conversations SET title = ?, updated_at = ? WHERE id = ?",
+      [title, Date.now(), id]
+    );
+  }
+
   async deleteConversation(id: string): Promise<void> {
     if (!this.db) throw new Error("Database not initialized");
 

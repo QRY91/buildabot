@@ -1,12 +1,9 @@
 import { exec } from "child_process";
 import { promisify } from "util";
 import * as path from "path";
-import { Tool } from "./base";
+import { Tool, ToolContext } from "./base";
 
 const execAsync = promisify(exec);
-
-// Sandbox directory - all commands execute here
-const SANDBOX_DIR = path.resolve(__dirname, "../../sandbox");
 
 // Whitelist of safe commands
 const ALLOWED_COMMANDS = [
@@ -70,7 +67,7 @@ const DANGEROUS_PATTERNS = [
  * Sandboxed shell command execution tool.
  *
  * Safety features:
- * 1. Commands execute only in sandbox directory
+ * 1. Commands execute in the agent's working directory
  * 2. Whitelist of allowed commands
  * 3. Blacklist of dangerous patterns
  * 4. Timeout limit (5 seconds)
@@ -83,7 +80,7 @@ export const executeCommandTool: Tool = {
     function: {
       name: "execute_command",
       description:
-        "Execute a safe shell command in the sandbox directory. " +
+        "Execute a safe shell command in the working directory. " +
         "Only basic read-only commands are allowed (ls, cat, grep, etc.). " +
         "Dangerous commands are blocked. Use with caution.",
       parameters: {
@@ -98,7 +95,7 @@ export const executeCommandTool: Tool = {
       },
     },
   },
-  execute: async (args) => {
+  execute: async (args, context: ToolContext) => {
     const command = args.command?.trim();
 
     if (!command) {
@@ -122,13 +119,13 @@ export const executeCommandTool: Tool = {
 
     try {
       const { stdout, stderr } = await execAsync(command, {
-        cwd: SANDBOX_DIR,
+        cwd: context.workingDirectory,
         timeout: 5000, // 5 second timeout
         maxBuffer: 1024 * 100, // 100KB max output
         env: {
           // Minimal environment
           PATH: process.env.PATH,
-          HOME: SANDBOX_DIR,
+          HOME: context.workingDirectory,
         },
       });
 

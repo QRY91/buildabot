@@ -10,6 +10,7 @@ import {
   readFileTool,
   writeFileTool,
 } from "./tools/filesystem";
+import { executeCommandTool } from "./tools/shell";
 import { DatabaseManager } from "./db/manager";
 import { AgentServer } from "./server/index";
 
@@ -60,7 +61,12 @@ async function main() {
   toolRegistry.register(readFileTool);
   toolRegistry.register(writeFileTool);
   toolRegistry.register(listDirectoryTool);
-  // toolRegistry.register(executeCommandTool); // Enable if you want shell access
+
+  // Conditionally enable shell tool based on environment variable
+  if (process.env.ENABLE_SHELL_TOOL === "true") {
+    console.log("Shell tool enabled (SANDBOX_MODE=" + (process.env.SANDBOX_MODE === "true" ? "true" : "false") + ")");
+    toolRegistry.register(executeCommandTool);
+  }
 
   // Check if server mode
   if (options.server) {

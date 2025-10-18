@@ -95,6 +95,12 @@ export function createAPIRouter(
         return res.status(404).json({ error: "Conversation not found" });
       }
 
+      // Auto-update title if it's still "New Chat"
+      if (conversation.title === "New Chat") {
+        const newTitle = content.length > 50 ? content.substring(0, 50) + "..." : content;
+        await db.updateConversationTitle(id, newTitle);
+      }
+
       const agent = new Agent(provider, toolRegistry, {
         db,
         eventEmitter,

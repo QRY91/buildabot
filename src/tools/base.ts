@@ -1,8 +1,12 @@
 import { ToolDefinition, ToolCall } from "../types";
 
+export interface ToolContext {
+  workingDirectory: string;
+}
+
 export interface Tool {
   definition: ToolDefinition;
-  execute: (args: Record<string, any>) => Promise<string>;
+  execute: (args: Record<string, any>, context: ToolContext) => Promise<string>;
 }
 
 export class ToolRegistry {
@@ -20,7 +24,7 @@ export class ToolRegistry {
     return Array.from(this.tools.values()).map((t) => t.definition);
   }
 
-  async execute(toolCall: ToolCall): Promise<string> {
+  async execute(toolCall: ToolCall, context: ToolContext): Promise<string> {
     const tool = this.get(toolCall.function.name);
     if (!tool) {
       throw new Error(`Tool not found: ${toolCall.function.name}`);
@@ -28,7 +32,7 @@ export class ToolRegistry {
 
     try {
       const args = JSON.parse(toolCall.function.arguments);
-      return await tool.execute(args);
+      return await tool.execute(args, context);
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       return `Error executing tool: ${message}`;

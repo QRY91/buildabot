@@ -3,6 +3,7 @@ import { ToolRegistry } from "./tools/base";
 import { Message, ToolMessage, UserMessage, ChatResponse } from "./types";
 import { DatabaseManager } from "./db/manager";
 import { EventEmitter } from "events";
+import * as path from "path";
 
 export interface AgentEvent {
   type: 'user_message' | 'assistant_message' | 'tool_call' | 'tool_result' | 'stream_chunk';
@@ -18,6 +19,7 @@ export class Agent {
   private db?: DatabaseManager | undefined;
   private eventEmitter?: EventEmitter | undefined;
   private currentConversationId?: string | undefined;
+  private workingDirectory: string;
 
   constructor(
     provider: LLMProvider,
@@ -25,12 +27,22 @@ export class Agent {
     options?: {
       db?: DatabaseManager | undefined;
       eventEmitter?: EventEmitter | undefined;
+      workingDirectory?: string | undefined;
     }
   ) {
     this.provider = provider;
     this.toolRegistry = toolRegistry;
     this.db = options?.db;
     this.eventEmitter = options?.eventEmitter;
+
+    // Set working directory: use provided, or default based on SANDBOX_MODE
+    if (options?.workingDirectory) {
+      this.workingDirectory = path.resolve(options.workingDirectory);
+    } else if (process.env.SANDBOX_MODE === "true") {
+      this.workingDirectory = path.resolve(__dirname, "../sandbox");
+    } else {
+      this.workingDirectory = process.cwd();
+    }
   }
 
   setConversationId(conversationId: string): void {
@@ -39,6 +51,10 @@ export class Agent {
 
   getConversationId(): string | undefined {
     return this.currentConversationId;
+  }
+
+  getWorkingDirectory(): string {
+    return this.workingDirectory;
   }
 
   async run(userInput: string): Promise<string> {
@@ -114,7 +130,9 @@ export class Agent {
           arguments: toolCall.function.arguments,
         });
 
-        const result = await this.toolRegistry.execute(toolCall);
+        const result = await this.toolRegistry.execute(toolCall, {
+          workingDirectory: this.workingDirectory,
+        });
         const toolDuration = Date.now() - toolStartTime;
 
         // Add tool result to conversation
@@ -222,7 +240,9 @@ export class Agent {
             arguments: toolCall.function.arguments,
           });
 
-          const result = await this.toolRegistry.execute(toolCall);
+          const result = await this.toolRegistry.execute(toolCall, {
+          workingDirectory: this.workingDirectory,
+        });
           const toolDuration = Date.now() - toolStartTime;
 
           const toolMessage: ToolMessage = {
@@ -328,7 +348,9 @@ export class Agent {
           arguments: toolCall.function.arguments,
         });
 
-        const result = await this.toolRegistry.execute(toolCall);
+        const result = await this.toolRegistry.execute(toolCall, {
+          workingDirectory: this.workingDirectory,
+        });
         const toolDuration = Date.now() - toolStartTime;
 
         const toolMessage: ToolMessage = {

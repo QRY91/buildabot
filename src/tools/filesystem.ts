@@ -1,27 +1,29 @@
 import { promises as fs, Dirent } from "fs";
-import { Tool } from "./base";
+import { Tool, ToolContext } from "./base";
+import { resolvePathInWorkingDir } from "./path-utils";
 
 export const readFileTool: Tool = {
   definition: {
     type: "function",
     function: {
       name: "read_file",
-      description: "Read the contents of a file at the specified path",
+      description: "Read the contents of a file at the specified path. Path is relative to the working directory.",
       parameters: {
         type: "object",
         properties: {
           path: {
             type: "string",
-            description: "The path to the file to read",
+            description: "The path to the file to read (relative to working directory)",
           },
         },
         required: ["path"],
       },
     },
   },
-  execute: async (args) => {
+  execute: async (args, context: ToolContext) => {
     try {
-      const content = await fs.readFile(args.path, "utf-8");
+      const resolvedPath = resolvePathInWorkingDir(args.path, context.workingDirectory);
+      const content = await fs.readFile(resolvedPath, "utf-8");
       return content;
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
@@ -35,13 +37,13 @@ export const writeFileTool: Tool = {
     type: "function",
     function: {
       name: "write_file",
-      description: "Write content to a file at the specified path",
+      description: "Write content to a file at the specified path. Path is relative to the working directory.",
       parameters: {
         type: "object",
         properties: {
           path: {
             type: "string",
-            description: "The path to the file to write",
+            description: "The path to the file to write (relative to working directory)",
           },
           content: {
             type: "string",
@@ -52,9 +54,10 @@ export const writeFileTool: Tool = {
       },
     },
   },
-  execute: async (args) => {
+  execute: async (args, context: ToolContext) => {
     try {
-      await fs.writeFile(args.path, args.content, "utf-8");
+      const resolvedPath = resolvePathInWorkingDir(args.path, context.workingDirectory);
+      await fs.writeFile(resolvedPath, args.content, "utf-8");
       return `Successfully wrote to ${args.path}`;
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
@@ -68,22 +71,23 @@ export const listDirectoryTool: Tool = {
     type: "function",
     function: {
       name: "list_directory",
-      description: "List all files and directories in the specified path",
+      description: "List all files and directories in the specified path. Path is relative to the working directory.",
       parameters: {
         type: "object",
         properties: {
           path: {
             type: "string",
-            description: "The directory path to list",
+            description: "The directory path to list (relative to working directory, use '.' for current directory)",
           },
         },
         required: ["path"],
       },
     },
   },
-  execute: async (args) => {
+  execute: async (args, context: ToolContext) => {
     try {
-      const entries = await fs.readdir(args.path, { withFileTypes: true });
+      const resolvedPath = resolvePathInWorkingDir(args.path, context.workingDirectory);
+      const entries = await fs.readdir(resolvedPath, { withFileTypes: true });
       const formatted = entries
         .map((entry: Dirent) => {
           const type = entry.isDirectory() ? "[DIR]" : "[FILE]";
